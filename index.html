@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>티셔츠 수령 QR 인증</title>
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -15,7 +15,42 @@
       background: #f5f5f5;
     }
     h1 { font-size: 18px; text-align: center; margin: 8px 0 16px; }
-    #reader { width: 100%; border-radius: 8px; overflow: hidden; }
+    #video-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #scan-frame {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 70%;
+      aspect-ratio: 1;
+      border: 3px solid #00ff00;
+      border-radius: 12px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.3);
+    }
+    canvas { display: none; }
+    button {
+      width: 100%;
+      padding: 16px;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      margin-top: 12px;
+      cursor: pointer;
+    }
+    #start-btn { background: #007bff; color: white; }
+    #next-btn { background: #28a745; color: white; display: none; }
     #result {
       margin-top: 16px;
       padding: 24px 16px;
@@ -31,66 +66,113 @@
     #result.error   { background: #f8d7da; color: #721c24; border: 2px solid #dc3545; }
     #result.info    { background: #d1ecf1; color: #0c5460; }
     #result .big { font-size: 24px; font-weight: bold; margin: 8px 0; }
-    #next-btn {
-      width: 100%;
-      padding: 16px;
-      font-size: 18px;
-      font-weight: bold;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 10px;
-      margin-top: 12px;
-      cursor: pointer;
-      display: none;
-    }
-    #next-btn:active { background: #0056b3; }
+    #status { text-align: center; margin: 8px 0; font-size: 13px; color: #666; }
   </style>
 </head>
 <body>
   <h1>🏳️‍🌈 티셔츠 수령 QR 인증</h1>
-  <div id="reader"></div>
-  <div id="result"></div>
+  
+  <div id="video-container">
+    <video id="video" playsinline></video>
+    <div id="scan-frame"></div>
+  </div>
+  <canvas id="canvas"></canvas>
+  
+  <div id="status">카메라 시작 버튼을 눌러주세요</div>
+  
+  <button id="start-btn" onclick="startCamera()">📷 카메라 시작</button>
   <button id="next-btn" onclick="resumeScanning()">다음 사람 스캔하기</button>
+  
+  <div id="result"></div>
 
   <script>
-  // 라이브러리 로드 확인
-  if (typeof Html5QrcodeScanner === 'undefined') {
-    document.body.innerHTML += '<div style="background:red;color:white;padding:20px;margin:20px;border-radius:8px;">❌ QR 라이브러리 로드 실패. 인터넷 확인 후 새로고침.</div>';
-  }
     // ====== 설정 ======
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyrd7xrfTjbEq53q7J6Zd8O4vxuVOAOaySUHmp3wrwImr7eEWNsBeJdpb5_JoPZIbQ0/exec';
-    const STAFF_TOKEN     = 'qpqr-X9k2mP4nR7vL';  // 앱스 스크립트와 동일하게
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/여기에_배포한_웹앱_URL/exec';
+    const STAFF_TOKEN     = 'change-this-to-random-string-abc12345';
     // ==================
 
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const resultDiv = document.getElementById('result');
+    const startBtn = document.getElementById('start-btn');
     const nextBtn = document.getElementById('next-btn');
-    let scanner;
+    const statusDiv = document.getElementById('status');
+    
+    let stream = null;
+    let scanning = false;
     let isProcessing = false;
 
+    async function startCamera() {
+      try {
+        statusDiv.textContent = '카메라 준비 중...';
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: 'environment',  // 후면 카메라
+            width: { ideal: 1280 },
+            height: { ideal: 1280 }
+          }
+        });
+        video.srcObject = stream;
+        video.setAttribute('playsinline', true);
+        await video.play();
+        
+        startBtn.style.display = 'none';
+        statusDiv.textContent = '🟢 QR을 초록 네모 안에 비춰주세요';
+        scanning = true;
+        scanLoop();
+      } catch (err) {
+        statusDiv.textContent = '❌ 카메라 접근 실패: ' + err.message;
+        alert('카메라 권한이 필요합니다. 브라우저 설정에서 카메라 허용 후 새로고침해주세요.');
+      }
+    }
+    
+    function scanLoop() {
+      if (!scanning) return;
+      
+      if (video.readyState === video.HAVE_ENOUGH_DATA && !isProcessing) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth'  // 흑백 반전도 시도
+        });
+        
+        if (code && code.data) {
+          scanning = false;
+          if (navigator.vibrate) navigator.vibrate(100);
+          verifyQR(code.data);
+          return;
+        }
+      }
+      
+      requestAnimationFrame(scanLoop);
+    }
+    
     function showResult(html, type) {
       resultDiv.innerHTML = html;
       resultDiv.className = type;
       resultDiv.style.display = 'block';
       nextBtn.style.display = (type === 'info') ? 'none' : 'block';
     }
-
+    
     async function verifyQR(qrId) {
       if (isProcessing) return;
       isProcessing = true;
-
+      
+      statusDiv.textContent = '확인 중...';
       showResult('확인 중...', 'info');
-
+      
       try {
         const response = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
-          // text/plain 사용해서 CORS preflight 회피
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ token: STAFF_TOKEN, qrId: qrId })
         });
-
         const result = await response.json();
-
+        
         if (result.status === 'success') {
           showResult(
             `✅ 수령 완료\n<div class="big">${result.name}</div>사이즈: ${result.size}`,
@@ -104,36 +186,26 @@
           );
           if (navigator.vibrate) navigator.vibrate([100, 100, 100]);
         } else if (result.status === 'not_found') {
-          showResult(`❌ 등록되지 않은 QR\n다시 확인해주세요`, 'error');
+          showResult(`❌ 등록되지 않은 QR\n인식된 내용: ${qrId.substring(0, 40)}`, 'error');
           if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
         } else {
           showResult(`❌ 오류\n${result.message || '알 수 없는 오류'}`, 'error');
         }
       } catch (err) {
-        showResult(`❌ 통신 오류\n${err.message}\n인터넷 연결을 확인해주세요`, 'error');
+        showResult(`❌ 통신 오류\n${err.message}`, 'error');
       }
+      
+      statusDiv.textContent = '결과 확인 후 "다음 사람 스캔하기" 버튼을 눌러주세요';
     }
-
+    
     function resumeScanning() {
       resultDiv.style.display = 'none';
       nextBtn.style.display = 'none';
       isProcessing = false;
+      scanning = true;
+      statusDiv.textContent = '🟢 QR을 초록 네모 안에 비춰주세요';
+      scanLoop();
     }
-
-    function onScanSuccess(decodedText) {
-      verifyQR(decodedText);
-    }
-
-    window.addEventListener('load', () => {
-      scanner = new Html5QrcodeScanner('reader', {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
-        rememberLastUsedCamera: true,
-        showTorchButtonIfSupported: true
-      }, false);
-      scanner.render(onScanSuccess);
-    });
   </script>
 </body>
 </html>
