@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>티셔츠 수령 QR</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    :root {
+      --r: #e40303; --o: #ff8c00; --y: #ffed00;
+      --g: #008026; --b: #004dff; --p: #750787;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      background: #faf7f2;
+    }
+    .card {
+      width: 100%; max-width: 360px;
+      background: #fff;
+      border-radius: 24px;
+      padding: 32px 28px 28px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.10);
+      text-align: center;
+    }
+    .stripe { display: flex; height: 6px; border-radius: 99px; overflow: hidden; margin-bottom: 24px; }
+    .stripe span { flex: 1; }
+    .stripe span:nth-child(1){background:var(--r)} .stripe span:nth-child(2){background:var(--o)}
+    .stripe span:nth-child(3){background:var(--y)} .stripe span:nth-child(4){background:var(--g)}
+    .stripe span:nth-child(5){background:var(--b)} .stripe span:nth-child(6){background:var(--p)}
+    h1 { font-size: 15px; color: #888; font-weight: 600; letter-spacing: 0.02em; }
+    .name { font-size: 26px; font-weight: 800; margin: 6px 0 2px; color: #1a1a1a; }
+    .size { font-size: 15px; color: #555; margin-bottom: 20px; }
+    .size b { color: var(--p); }
+    #qr {
+      display: inline-block; padding: 16px; background: #fff;
+      border: 1px solid #eee; border-radius: 16px;
+    }
+    #qr img { display: block; }
+    .hint {
+      margin-top: 22px; font-size: 13px; color: #999; line-height: 1.7;
+    }
+    .err { color: var(--r); font-weight: 600; padding: 40px 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="stripe"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <h1>티셔츠 수령 QR</h1>
+    <div class="name" id="name"></div>
+    <div class="size" id="size"></div>
+    <div id="qr"></div>
+    <p class="hint">현장에서 이 화면을 스태프에게 보여주세요.<br>캡처해 저장해두면 신호가 약해도 안전해요.</p>
+  </div>
+
+  <script>
+    const p = new URLSearchParams(location.search);
+    const id = p.get('id');
+    const name = p.get('name');
+    const size = p.get('size');
+
+    if (id) {
+      if (name) document.getElementById('name').textContent = name + '님';
+      if (size) document.getElementById('size').innerHTML = '사이즈 <b>' + size + '</b>';
+      new QRCode(document.getElementById('qr'), {
+        text: id, width: 220, height: 220,
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } else {
+      document.querySelector('.card').innerHTML =
+        '<div class="err">잘못된 링크입니다.<br>주최측에 문의해주세요.</div>';
+    }
+  </script>
+</body>
+</html>
