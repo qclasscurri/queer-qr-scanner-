@@ -71,25 +71,25 @@
 </head>
 <body>
   <h1>🏳️‍🌈 티셔츠 수령 QR 인증</h1>
-  
+
   <div id="video-container">
     <video id="video" playsinline></video>
     <div id="scan-frame"></div>
   </div>
   <canvas id="canvas"></canvas>
-  
+
   <div id="status">카메라 시작 버튼을 눌러주세요</div>
-  
+
   <button id="start-btn" onclick="startCamera()">📷 카메라 시작</button>
   <button id="next-btn" onclick="resumeScanning()">다음 사람 스캔하기</button>
-  
+
   <div id="result"></div>
 
   <script>
-    // ====== 설정 ======
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyrd7xrfTjbEq53q7J6Zd8O4vxuVOAOaySUHmp3wrwImr7eEWNsBeJdpb5_JoPZIbQ0/exec';
+    // ====== 설정 (이 두 줄만 본인 것으로 바꾸세요) ======
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgJOqFvFo_dDjf8Rr7cIhTYWm1av_-AOfEbIXtmhVyWqLksmt8MV1CWcD9H8-d4w4c/exec';
     const STAFF_TOKEN     = 'qpqr-X9k2mP4nR7vL';
-    // ==================
+    // ===================================================
 
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -98,7 +98,7 @@
     const startBtn = document.getElementById('start-btn');
     const nextBtn = document.getElementById('next-btn');
     const statusDiv = document.getElementById('status');
-    
+
     let stream = null;
     let scanning = false;
     let isProcessing = false;
@@ -107,8 +107,8 @@
       try {
         statusDiv.textContent = '카메라 준비 중...';
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { 
-            facingMode: 'environment',  // 후면 카메라
+          video: {
+            facingMode: 'environment',
             width: { ideal: 1280 },
             height: { ideal: 1280 }
           }
@@ -116,7 +116,7 @@
         video.srcObject = stream;
         video.setAttribute('playsinline', true);
         await video.play();
-        
+
         startBtn.style.display = 'none';
         statusDiv.textContent = '🟢 QR을 초록 네모 안에 비춰주세요';
         scanning = true;
@@ -126,20 +126,20 @@
         alert('카메라 권한이 필요합니다. 브라우저 설정에서 카메라 허용 후 새로고침해주세요.');
       }
     }
-    
+
     function scanLoop() {
       if (!scanning) return;
-      
+
       if (video.readyState === video.HAVE_ENOUGH_DATA && !isProcessing) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
+
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'attemptBoth'  // 흑백 반전도 시도
+          inversionAttempts: 'attemptBoth'
         });
-        
+
         if (code && code.data) {
           scanning = false;
           if (navigator.vibrate) navigator.vibrate(100);
@@ -147,24 +147,24 @@
           return;
         }
       }
-      
+
       requestAnimationFrame(scanLoop);
     }
-    
+
     function showResult(html, type) {
       resultDiv.innerHTML = html;
       resultDiv.className = type;
       resultDiv.style.display = 'block';
       nextBtn.style.display = (type === 'info') ? 'none' : 'block';
     }
-    
+
     async function verifyQR(qrId) {
       if (isProcessing) return;
       isProcessing = true;
-      
+
       statusDiv.textContent = '확인 중...';
       showResult('확인 중...', 'info');
-      
+
       try {
         const response = await fetch(APPS_SCRIPT_URL, {
           method: 'POST',
@@ -172,7 +172,7 @@
           body: JSON.stringify({ token: STAFF_TOKEN, qrId: qrId })
         });
         const result = await response.json();
-        
+
         if (result.status === 'success') {
           showResult(
             `✅ 수령 완료\n<div class="big">${result.name}</div>사이즈: ${result.size}`,
@@ -194,10 +194,10 @@
       } catch (err) {
         showResult(`❌ 통신 오류\n${err.message}`, 'error');
       }
-      
+
       statusDiv.textContent = '결과 확인 후 "다음 사람 스캔하기" 버튼을 눌러주세요';
     }
-    
+
     function resumeScanning() {
       resultDiv.style.display = 'none';
       nextBtn.style.display = 'none';
